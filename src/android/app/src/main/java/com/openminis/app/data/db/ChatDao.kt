@@ -298,4 +298,12 @@ interface ChatDao {
      *  alongside the paginated slice so callers can compute `hasMore`. */
     @Query("SELECT COUNT(*) FROM messages WHERE session_id = :sessionId")
     suspend fun messageCountForSession(sessionId: String): Int
+
+    // ─── [minis-fork:multi-soul] per-session persona override ────────────────
+
+    @Query("SELECT soul_id FROM sessions WHERE id = :id")
+    suspend fun getSessionSoulId(id: String): String?
+
+    @Query("UPDATE sessions SET soul_id = :soulId, updated_at = :updatedAt WHERE id = :id")
+    suspend fun updateSessionSoul(id: String, soulId: String?, updatedAt: Long = System.currentTimeMillis())
 }

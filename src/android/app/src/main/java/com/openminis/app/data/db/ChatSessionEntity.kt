@@ -25,4 +25,9 @@ data class ChatSessionEntity(
     // ("OFF"/"LOW"/"MEDIUM"/"HIGH"/"XHIGH") and represents an explicit user
     // choice that survives cold-start.
     @ColumnInfo(name = "thinking_override") val thinkingOverride: String? = null,
+    // [minis-fork:multi-soul] Per-session persona override. null = use the
+    // global SOUL.md. Non-null names a persona file under
+    // <filesDir>/minis-global/memory/souls/<soulId>.md whose body replaces
+    // the global personality at system-prompt build time.
+    @ColumnInfo(name = "soul_id") val soulId: String? = null,
 )

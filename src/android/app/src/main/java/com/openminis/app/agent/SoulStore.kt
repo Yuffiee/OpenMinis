@@ -180,9 +180,26 @@ object SoulStore {
     private const val TAG = "SoulStore"
     private const val FILE_NAME = "SOUL.md"
     private const val MEMORY_SUBDIR = "minis-global/memory"
+    /** [minis-fork:multi-soul] Named persona files live in this subdir. */
+    private const val SOULS_SUBDIR = "souls"
 
     fun fileLocation(context: Context): File =
         File(File(context.filesDir, MEMORY_SUBDIR), FILE_NAME)
+
+    /** [minis-fork:multi-soul] Directory holding named persona files. */
+    fun soulsDir(context: Context): File =
+        File(File(context.filesDir, MEMORY_SUBDIR), SOULS_SUBDIR)
+
+    /** [minis-fork:multi-soul] Persona file for [soulId]. */
+    fun soulFile(context: Context, soulId: String): File =
+        File(soulsDir(context), "$soulId.md")
+
+    /**
+     * [minis-fork:multi-soul] Summary of one named persona for picker UI.
+     * [name] is the `name:` frontmatter of the persona file, or the file
+     * stem when the file has no frontmatter / is unreadable.
+     */
+    data class SoulSummary(val soulId: String, val name: String)
 
     // -- Body length rules (language-aware) ----------------------------
     //
@@ -315,24 +332,30 @@ lang: "auto"
     }
 
     /**
-     * Read + parse the current SOUL.md. Returns null when the file is
-     * missing or unreadable; an empty body parses to default-meta with
-     * empty body and callers may treat that as "fall back to default".
+     * Read + parse the current SOUL.md (or a named persona when [soulId]
+     * is non-null). Returns null when the file is missing or unreadable;
+     * an empty body parses to default-meta with empty body and callers
+     * may treat that as "fall back to default".
      */
-    fun load(context: Context): SoulFile? {
-        val file = fileLocation(context)
+    fun load(context: Context, soulId: String? = null): SoulFile? {
+        val file = if (soulId.isNullOrBlank()) fileLocation(context) else soulFile(context, soulId)
         if (!file.exists()) return null
         return try {
             SoulMDParser.parse(file.readText())
         } catch (t: Throwable) {
-            AppLogger.warning(TAG, "SOUL.md load failed: ${t.message}")
+            AppLogger.warning(TAG, "SOUL.md load failed (soulId=$soulId): ${t.message}")
             null
         }
     }
 
-    /** Atomic write through a `.tmp` sibling, then rename. */
-    fun save(context: Context, file: SoulFile) {
-        val target = fileLocation(context)
+    /**
+     * [minis-fork:multi-soul] Atomic write of a persona file ([soulId]
+     * non-null) or the global SOUL.md (null). The global metadata cache
+     * is only refreshed when writing the global file — bubble headers
+     * keep using the global persona identity.
+     */
+    fun save(context: Context, file: SoulFile, soulId: String? = null) {
+        val target = if (soulId.isNullOrBlank()) fileLocation(context) else soulFile(context, soulId)
         target.parentFile?.mkdirs()
         val text = SoulMDParser.serialize(file)
         val tmp = File(target.parentFile, "${target.name}.tmp")
@@ -344,7 +367,39 @@ lang: "auto"
             target.writeText(text)
             tmp.delete()
         }
-        _cachedMetadata.value = file.metadata
+        if (soulId.isNullOrBlank()) _cachedMetadata.value = file.metadata
+    }
+
+    /**
+     * [minis-fork:multi-soul] List named personas. Files are the stems of
+     * `souls/*.md`; the display name is the file's `name:` frontmatter
+     * when parseable, falling back to the stem.
+     */
+    fun listSouls(context: Context): List<SoulSummary> {
+        val dir = soulsDir(context)
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles { f -> f.isFile && f.name.endsWith(".md") }
+            ?.sortedBy { it.name.lowercase() }
+            ?.mapNotNull { f ->
+                val soulId = f.name.removeSuffix(".md")
+                if (soulId.isBlank()) null
+                else {
+                    val name = try {
+                        SoulMDParser.parse(f.readText()).metadata.name.trim()
+                            .ifEmpty { soulId }
+                    } catch (t: Throwable) {
+                        soulId
+                    }
+                    SoulSummary(soulId, name)
+                }
+            }
+            ?: emptyList()
+    }
+
+    /** [minis-fork:multi-soul] Delete a named persona file. */
+    fun deleteSoul(context: Context, soulId: String) {
+        val f = soulFile(context, soulId)
+        if (f.exists()) f.delete()
     }
 
     /**
@@ -423,7 +478,9 @@ object SystemPromptBuilder {
 
     /**
      * Render the identity sentence (template + name) and optionally
-     * append the user-authored personality body from SOUL.md.
+     * append the user-authored personality body from SOUL.md (or, when
+     * [soulId] is non-null, from the named persona file — see
+     * [com.openminis.app.agent.SoulStore.load]).
      *
      * Two distinct trailing-whitespace contracts so the next concatenated
      * sentence in [com.openminis.app.ui.chat.ChatViewModel.buildSystemPrompt]
@@ -446,8 +503,8 @@ object SystemPromptBuilder {
      * sentence alone is the safe fallback when SOUL.md is missing or
      * empty, matching pre-SOUL behavior.
      */
-    fun identitySection(context: Context): String {
-        val file = SoulStore.load(context)
+    fun identitySection(context: Context, soulId: String? = null): String {
+        val file = SoulStore.load(context, soulId)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
             .ifEmpty { "Minis" }

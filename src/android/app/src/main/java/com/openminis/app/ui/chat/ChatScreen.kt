@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.automirrored.filled.Article
@@ -686,6 +687,8 @@ fun ChatScreen(
     var showAttachMenu by remember { mutableStateOf(false) }
     var showChatMenu by remember { mutableStateOf(false) }
     var showSkillsSheet by remember { mutableStateOf(false) }
+    // [minis-fork:multi-soul] Session persona sheet visibility.
+    var showSoulSheet by remember { mutableStateOf(false) }
     // [T-mcp-integration-android] MCPs-in-Session sheet visibility.
     var showMcpsSheet by remember { mutableStateOf(false) }
     var showTokenUsageSheet by remember { mutableStateOf(false) }
@@ -2267,6 +2270,17 @@ fun ChatScreen(
                                 },
                             )
                             MinisMenuDivider()
+                            // [minis-fork:multi-soul] Session persona picker.
+                            DropdownMenuItem(
+                                text = { Text("Persona") },
+                                onClick = {
+                                    showChatMenu = false
+                                    showSoulSheet = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Face, contentDescription = null)
+                                },
+                            )
                             // Session Skills (iOS parity)
                             if (skillRepository != null) {
                                 DropdownMenuItem(
@@ -5456,6 +5470,20 @@ fun ChatScreen(
             skillRepository = skillRepository,
             sessionId = sessionId,
             onDismiss = { showSkillsSheet = false },
+        )
+    }
+
+    // [minis-fork:multi-soul] Session persona bottom sheet.
+    if (showSoulSheet) {
+        val currentSoulId by viewModel.soulId.collectAsState()
+        SessionSoulSheet(
+            context = context,
+            currentSoulId = currentSoulId,
+            onSelect = { soulId ->
+                viewModel.setSoul(soulId)
+                showSoulSheet = false
+            },
+            onDismiss = { showSoulSheet = false },
         )
     }
 

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Psychology
@@ -58,6 +59,7 @@ internal fun toolAccentColor(toolName: String): Color = when (toolName) {
     "browser_use" -> Color(0xFF007AFF)
     "read_image" -> Color(0xFFAF52DE)
     "memory_write", "memory_get" -> Color(0xFFFF2D55)
+    "persona" -> Color(0xFFAF52DE)      // [minis-fork:multi-soul]
     "web_search" -> Color(0xFF32ADE6)    // iOS: .cyan for search
     else -> Color(0xFF8E8E93)
 }
@@ -71,6 +73,7 @@ internal fun toolIconFor(toolName: String) = when (toolName) {
     "browser_use" -> Icons.Default.Language            // iOS: globe
     "read_image" -> Icons.Default.Image                // iOS: photo
     "memory_write", "memory_get" -> Icons.Default.Psychology // iOS: brain.head.profile
+    "persona" -> Icons.Default.Face                     // [minis-fork:multi-soul]
     "web_search" -> Icons.Default.Search               // iOS: magnifyingglass
     else -> Icons.Default.Build
 }

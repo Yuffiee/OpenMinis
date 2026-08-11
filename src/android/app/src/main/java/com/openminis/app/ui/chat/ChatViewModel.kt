@@ -902,6 +902,12 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
+    // [minis-fork:multi-soul] Per-session persona override. null = global
+    // SOUL.md. Loaded from DB by loadSession(); `setSoul()` persists a
+    // change. System prompt injection reads this synchronously.
+    internal val _soulId = MutableStateFlow<String?>(null)
+    val soulId: StateFlow<String?> = _soulId.asStateFlow()
+
     /**
      * [T-android-enhanced-cache] Enhanced Cache (1-hour Anthropic cache TTL)
      * toggle. Per-VM memory state, NOT persisted — mirrors iOS
@@ -1339,6 +1345,24 @@ class ChatViewModel(
             return saved
         }
         return ""
+    }
+
+    /**
+     * [minis-fork:multi-soul] Switch this session's persona. null resets
+     * to the global SOUL.md. Persists to DB and takes effect on the next
+     * system-prompt build.
+     */
+    fun setSoul(soulId: String?) {
+        val next = soulId?.takeIf { it.isNotBlank() }
+        _soulId.value = next
+        viewModelScope.launch {
+            val sid = ensureSession()
+            chatRepository.dao.updateSessionSoul(sid, next)
+        }
+        appendSystemInfo(
+            text = if (next != null) "Session persona switched to \"$next\"." else "Session persona reset to global SOUL.md.",
+            iconKind = "persona",
+        )
     }
 
     /** Toggle memory writes on/off, persist to DB, and append a system-info message. */
@@ -2770,6 +2794,7 @@ class ChatViewModel(
         val session = chatRepository.createSession(
             modelId = modelId,
             memoryEnabled = _memoryEnabled.value,
+            soulId = _soulId.value,
         )
         realSessionId = session.id
         // Move our cached VM from the draft key ("__new__...") to the real
@@ -2952,6 +2977,9 @@ class ChatViewModel(
             _sessionTitle.value = session.title ?: "New Chat"
             _sessionCategory.value = session.category
             _memoryEnabled.value = session.memoryEnabled != 0
+            // [minis-fork:multi-soul] Hydrate the per-session persona
+            // override; null = global SOUL.md.
+            _soulId.value = session.soulId
             // T239: hydrate persisted thinking-mode override. null = unset
             // (use OFF as the legacy default); non-null = explicit user
             // choice persisted across cold-start. runCatching guards against
@@ -7945,7 +7973,7 @@ class ChatViewModel(
         // has no personality body, identitySection() returns the identity
         // sentence with its original single trailing space — the full
         // assembled prompt then matches the pre-SOUL prompt byte-for-byte.
-        val identitySection = com.openminis.app.agent.SystemPromptBuilder.identitySection(context)
+        val identitySection = com.openminis.app.agent.SystemPromptBuilder.identitySection(context, _soulId.value)
         // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
         // gate: when memory is disabled for this session, replace the
         // "memory_write / memory_get" tool bullets and the "Memory system:"
